@@ -3,6 +3,7 @@ namespace Kunedo
 {
     public class FanRadiator : ModuleActiveRadiator
     {
+        [KSPField(isPersistant = false)]
         private string loopName = "heatsink";
         [KSPField(isPersistant = false)]
         public string SoundFile;
@@ -16,7 +17,7 @@ namespace Kunedo
         public float AnimationAcceleration;
         private AudioSource charge_up;
         private AnimationState[] loopStates;
-        private bool activeanim = false;
+        public bool activeanim = false;
         public override void OnStart(StartState state)
         {
             loopStates = Utils.SetUpAnimation(loopName, part);
@@ -26,6 +27,7 @@ namespace Kunedo
             }                
             charge_up = gameObject.AddComponent<AudioSource>();
             charge_up.volume = Volumen;
+            charge_up.loop = true;
             charge_up.maxDistance = DistanceMax;
             charge_up.rolloffMode = AudioRolloffMode.Linear;
             charge_up.minDistance = 0.1f;            
@@ -33,55 +35,27 @@ namespace Kunedo
             if (GameDatabase.Instance.ExistsAudioClip(SoundFile))
             {
                 charge_up.clip = GameDatabase.Instance.GetAudioClip(SoundFile);
-                Debug.Log("sonido cargado correctamente! ");                
+                Debug.Log("Sound loaded! ");                
             }
             if (!GameDatabase.Instance.ExistsAudioClip(SoundFile))
             {
-                Debug.LogError("no se a especificado la ruta del sonido en loop" + GameDatabase.Instance.ToString());
+                Debug.LogError("Directory not find!" + GameDatabase.Instance.ToString());
             }            
-        }
-        public override void Activate()
+        }        
+        public void Update()
         {
-            base.Activate();
-            activeanim = true;
-            foreach (AnimationState loop in loopStates)
+            if (HighLogic.LoadedSceneIsEditor)
             {
-                loop.enabled = true;
-                loop.wrapMode = WrapMode.Loop;                                    
-            }            
-            if (charge_up.clip != null)
-            {
-                if (!charge_up.isPlaying)
-                {
-                    charge_up.Play();
-                    charge_up.loop = true;
-                }
-            }                       
-        }
-        public override void Shutdown()
-        {
-            base.Shutdown();
-            activeanim = false;
-            foreach (AnimationState loop in loopStates)
-            {
-                loop.wrapMode = WrapMode.Loop;                                                 
-            }            
-            if (charge_up.clip != null)
-            {
-                if (charge_up.isPlaying)
-                {
-                    charge_up.Stop();
-                    charge_up.loop = false;
-                }                
+                charge_up.volume = 0;
             }
-        }
-        public override void OnUpdate()
-        {
-            base.OnUpdate();
+            else
+            {
+                charge_up.volume = Volumen;                
+            }
             foreach (AnimationState loop in loopStates)
             {
-                if (activeanim)
-                {
+                if (IsCooling)
+                {                    
                     if (loop.speed < AnimationSpeed)
                     {
                         loop.speed += AnimationAcceleration * Time.deltaTime;
@@ -90,8 +64,22 @@ namespace Kunedo
                     {
                         loop.speed = AnimationSpeed;
                     }
+                    if (!activeanim)
+                    {
+                        loop.enabled = true;
+                        loop.wrapMode = WrapMode.Loop;                        
+                        if (charge_up.clip != null && !HighLogic.LoadedSceneIsEditor)                                
+                        {
+                            if (!charge_up.isPlaying)
+                            {
+                                charge_up.Play();
+                                charge_up.loop = true;
+                            }
+                        }
+                        activeanim = true;
+                    }
                 }
-                if (!activeanim)
+                if (!IsCooling)
                 {
                     if (loop.speed > 0)
                     {
@@ -101,8 +89,21 @@ namespace Kunedo
                     {
                         loop.speed = 0;
                     }
+                    if (activeanim)
+                    {
+                        loop.wrapMode = WrapMode.Loop;
+                        if (charge_up.clip != null)
+                        {
+                            if (charge_up.isPlaying && !HighLogic.LoadedSceneIsEditor)
+                            {
+                                charge_up.Stop();
+                                charge_up.loop = false;
+                            }
+                        }
+                        activeanim = false;
+                    }
                 }
             }
-        }
+        }        
     }
 }
