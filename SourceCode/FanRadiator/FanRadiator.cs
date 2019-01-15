@@ -1,7 +1,8 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 namespace Kunedo
 {
-    public class FanRadiator : ModuleActiveRadiator
+    public class FanRadiator : PartModule
     {
         [KSPField(isPersistant = false)]
         private string loopName = "heatsink";
@@ -18,9 +19,11 @@ namespace Kunedo
         private AudioSource charge_up;
         private AnimationState[] loopStates;
         public bool activeanim = false;
+        public ModuleActiveRadiator mar = null;
         public override void OnStart(StartState state)
         {
-            loopStates = Utils.SetUpAnimation(loopName, part);
+            base.OnStart(state);
+            loopStates = SetUpAnimation(loopName, part);
             foreach (AnimationState loop in loopStates)
             {
                 loop.speed = 0;
@@ -40,8 +43,23 @@ namespace Kunedo
             if (!GameDatabase.Instance.ExistsAudioClip(SoundFile))
             {
                 Debug.LogError("Directory not find!" + GameDatabase.Instance.ToString());
-            }            
-        }        
+            }
+            mar = part.GetComponent<ModuleActiveRadiator>();
+        }
+        public static AnimationState[] SetUpAnimation(string animationName, Part part)  //Thanks Majiir!
+        {
+            var states = new List<AnimationState>();
+            foreach (var animation in part.FindModelAnimators(animationName))
+            {
+                var animationState = animation[animationName];
+                animationState.speed = 0;
+                animationState.enabled = true;
+                animationState.wrapMode = WrapMode.ClampForever;
+                animation.Blend(animationName);
+                states.Add(animationState);
+            }
+            return states.ToArray();
+        }
         public void Update()
         {
             if (HighLogic.LoadedSceneIsEditor)
@@ -51,18 +69,19 @@ namespace Kunedo
             else
             {
                 charge_up.volume = Volumen;                
-            }
+            } 
             foreach (AnimationState loop in loopStates)
             {
-                if (IsCooling)
-                {                    
+                if (mar.IsCooling)
+                {
                     if (loop.speed < AnimationSpeed)
                     {
-                        loop.speed += AnimationAcceleration * Time.deltaTime;
+                        loop.speed += AnimationAcceleration * TimeWarp.deltaTime;
                     }
                     if (loop.speed >= AnimationSpeed)
                     {
                         loop.speed = AnimationSpeed;
+                        part.emissiveConstant = 18;
                     }
                     if (!activeanim)
                     {
@@ -79,15 +98,16 @@ namespace Kunedo
                         activeanim = true;
                     }
                 }
-                if (!IsCooling)
+                if (!mar.IsCooling)
                 {
                     if (loop.speed > 0)
                     {
-                        loop.speed -= AnimationAcceleration * Time.deltaTime;
+                        loop.speed -= AnimationAcceleration * TimeWarp.deltaTime;
                     }
                     if (loop.speed <= 0)
                     {
                         loop.speed = 0;
+                        part.emissiveConstant = 3;
                     }
                     if (activeanim)
                     {
@@ -104,6 +124,19 @@ namespace Kunedo
                     }
                 }
             }
-        }        
+        }
+        public string GetModuleTitle()
+        {
+            return "Fan Radiator";
+        }
+        public override string GetInfo()
+        {
+            return "Ventilated radiator that cools with great efficiency.\n\n" + "with fans at maximum power cooling : " + "<b>" + "15000KW" + "</b>";
+        }
+
+        public Callback<Rect> GetDrawModulePanelCallback()
+        {
+            return null;
+        }
     }
 }
